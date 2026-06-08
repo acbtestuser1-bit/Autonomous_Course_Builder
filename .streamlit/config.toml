@@ -1,7 +1,9 @@
 [server]
 headless = true
+# Behind Render's reverse proxy, XSRF protection must be off or the WebSocket
+# connection is blocked and the app never loads (blank page / infinite spinner).
 enableCORS = false
-enableXsrfProtection = true
+enableXsrfProtection = false
 
 [browser]
 gatherUsageStats = false
