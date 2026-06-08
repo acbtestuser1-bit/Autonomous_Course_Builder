@@ -150,9 +150,10 @@ class SyllabusGenerator:
             return generated_content, qa_review
             
         except Exception as e:
-            logger.error(f"Syllabus generation failed: {e}", exc_info=True)
-            raise Exception(f"Syllabus generation failed: {e}")
-    
+            logger.error("Syllabus generation failed", exc_info=True)
+            # Include the exception TYPE so an empty message still says something useful.
+            raise Exception(f"{type(e).__name__}: {e}") from e
+
     async def _build_source_pool(self, course_context: CourseContext) -> SourcePool:
         """Build a numbered, citable source pool. Never raises — degrades to an
         empty pool (the grounding rule still forbids fabrication).
