@@ -22,6 +22,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Bump this whenever deploying so Render logs prove which build is live.
+APP_BUILD = "2026-06-08-prompt-state-fix-2"
+logger.info(f"=== ACB module import — build {APP_BUILD} ===")
+
 from config import (
     CourseContext, CustomSLO, TeachingStyle, AssessmentStyle, 
     LectureFormat, ProgramType, ModelType, AIClassroomUse, 
@@ -92,6 +96,11 @@ def init_session_state():
         if key not in st.session_state:
             st.session_state[key] = value
             logger.debug(f"Set session state {key}")
+
+    logger.info(
+        f"init_session_state done (build {APP_BUILD}) — "
+        f"custom_prompts present: {'custom_prompts' in st.session_state}"
+    )
 
 def render_header():
     """Render application header."""
@@ -1294,7 +1303,13 @@ def main():
     )
     
     try:
+        logger.info(f"ACB main() run — build {APP_BUILD}")
         init_session_state()
+        # Defensive belt-and-suspenders: prove (and fix) any missing prompt keys.
+        for k, v in (('custom_prompts', {}), ('prompt_versions', []), ('active_prompt_version', None)):
+            if k not in st.session_state:
+                st.session_state[k] = v
+                logger.warning(f"DEFENSIVE: session key '{k}' was missing after init — set it now")
         render_header()
         
         # Dependency warning
