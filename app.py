@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Bump this whenever deploying so Render logs prove which build is live.
-APP_BUILD = "2026-06-08-errsurface-5"
+APP_BUILD = "2026-06-08-podcast-tab-6"
 logger.info(f"=== ACB module import — build {APP_BUILD} ===")
 
 from config import (
@@ -46,6 +46,7 @@ from ui_components import (
 )
 from prompt_ui import render_prompt_editor, render_prompt_version_manager
 from prompt_manager import get_prompt_manager
+from podcast import build_podcast, OPENAI_TTS_VOICES
 
 def run_async(coro):
     """Run an async coroutine from Streamlit's (sync) script thread.
@@ -98,6 +99,7 @@ def init_session_state():
         'textbook_index_hash': None,
         'candidate_sources': [],
         'selected_sources': [],
+        'podcast_episodes': [],
         'generation_errors': {},
         'ai_classroom_use': AIClassroomUse.CONDITIONAL.value,
         'syllabus_topics': [],
@@ -1318,6 +1320,71 @@ def render_grader_tab():
                 st.success("Course creation completed successfully!")
                 st.balloons()
 
+def render_podcast_tab():
+    """Render the two-voice podcast tab — chapter-wise audio from lecture notes."""
+    st.header("🎙️ Course Podcast")
+    st.markdown("*Turn the generated lecture into a two-host audio podcast, chapter by chapter.*")
+
+    lec = st.session_state.generated_content.get("lecture_notes")
+    if not lec:
+        st.info("Generate a lecture in the **Lecture Notes** tab first — the podcast is built from it.")
+        return
+
+    lecture_text = lec["content"].content
+    course_name = st.session_state.course_context.course_name if st.session_state.course_context else "the course"
+
+    col1, col2 = st.columns(2)
+    with col1:
+        voice_a = st.selectbox("Host 1 voice", OPENAI_TTS_VOICES, index=4, key="podcast_voice_a")  # nova
+    with col2:
+        voice_b = st.selectbox("Host 2 voice", OPENAI_TTS_VOICES, index=3, key="podcast_voice_b")  # onyx
+    max_chapters = st.slider("Max chapters", 1, 8, 5, help="How many lecture sections to turn into episodes")
+
+    if not st.session_state.api_key:
+        st.warning("Enter your OpenAI API key in the sidebar to generate audio.")
+
+    if st.button("🎧 Generate Podcast", type="primary", disabled=not st.session_state.api_key):
+        if voice_a == voice_b:
+            st.warning("Pick two different voices for the two hosts.")
+        else:
+            try:
+                with st.status("🎙️ Generating podcast...", expanded=True) as status:
+                    episodes = build_podcast(
+                        api_key=st.session_state.api_key,
+                        course_name=course_name,
+                        lecture_text=lecture_text,
+                        voice_a=voice_a,
+                        voice_b=voice_b,
+                        model="gpt-4o-mini",
+                        max_chapters=max_chapters,
+                        progress=lambda msg: status.update(label=msg),
+                    )
+                    status.update(label=f"✅ {len(episodes)} episode(s) ready!", state="complete")
+                st.session_state.podcast_episodes = episodes
+            except Exception as e:
+                logger.error("Podcast generation failed", exc_info=True)
+                st.error(f"Podcast generation failed: {type(e).__name__}: {e}")
+
+    episodes = st.session_state.get("podcast_episodes", [])
+    if episodes:
+        st.markdown("---")
+        for i, ep in enumerate(episodes, 1):
+            st.subheader(f"Episode {i}: {ep['title']}")
+            if ep.get("audio"):
+                st.audio(ep["audio"], format="audio/mp3")
+                st.download_button(
+                    "⬇️ Download MP3",
+                    data=ep["audio"],
+                    file_name=f"podcast_ch{i}.mp3",
+                    mime="audio/mpeg",
+                    key=f"dl_podcast_{i}",
+                )
+            with st.expander("📝 Script"):
+                for turn in ep.get("script", []):
+                    who = "Host 1" if str(turn.get("speaker", "A")).upper().startswith("A") else "Host 2"
+                    st.markdown(f"**{who}:** {turn.get('text', '')}")
+
+
 def main():
     """Main application function with enhanced error handling."""
     logger.info("Starting Autonomous Course Builder application")
@@ -1347,25 +1414,29 @@ def main():
         render_sidebar()
         
         # Main tabs
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "Generate Syllabus", 
-            "Lecture Notes", 
-            "Assignment Generation", 
-            "Assignment Grader"
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "Generate Syllabus",
+            "Lecture Notes",
+            "Assignment Generation",
+            "Assignment Grader",
+            "🎙️ Podcast"
         ])
-        
+
         with tab1:
             render_syllabus_tab()
-        
+
         with tab2:
             render_lecture_notes_tab()
-        
+
         with tab3:
             render_assignment_tab()
-        
+
         with tab4:
             render_grader_tab()
-        
+
+        with tab5:
+            render_podcast_tab()
+
         # Footer
         st.markdown("---")
         st.markdown(
