@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Bump this whenever deploying so Render logs prove which build is live.
-APP_BUILD = "2026-06-08-prompt-state-fix-2"
+APP_BUILD = "2026-06-08-async-fix-3"
 logger.info(f"=== ACB module import — build {APP_BUILD} ===")
 
 from config import (
@@ -48,10 +48,37 @@ from prompt_ui import render_prompt_editor, render_prompt_version_manager
 from prompt_manager import get_prompt_manager
 
 def run_async(coro):
-    """Helper to run async functions in Streamlit context."""
-    import nest_asyncio
-    nest_asyncio.apply()
-    return asyncio.run(coro)
+    """Run an async coroutine from Streamlit's (sync) script thread.
+
+    Runs the coroutine in a dedicated worker thread with its own fresh event
+    loop. This avoids nest_asyncio, which breaks sniffio/anyio detection on
+    newer httpx/openai versions ("unknown async library, or not in async
+    context") and was failing both generation and source search.
+    """
+    import threading
+
+    box = {}
+
+    def _runner():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            box["value"] = loop.run_until_complete(coro)
+        except BaseException as e:  # propagate to caller thread
+            box["error"] = e
+        finally:
+            try:
+                loop.close()
+            finally:
+                asyncio.set_event_loop(None)
+
+    t = threading.Thread(target=_runner, daemon=True)
+    t.start()
+    t.join()
+
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
 
 def init_session_state():
     """Initialize session state variables."""
