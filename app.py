@@ -79,7 +79,13 @@ def init_session_state():
         'current_custom_instructions': "",  # Track current instructions separately
         'applied_suggestions_cumulative': "",
         'uploaded_file_description': "",  # Track file description separately
-        'syllabus_versions': []
+        'syllabus_versions': [],
+        # Prompt management (PromptManager is a module-level singleton whose
+        # __init__ only runs once, so these MUST be initialized per session here
+        # or a fresh session raises "st.session_state has no attribute custom_prompts").
+        'custom_prompts': {},
+        'prompt_versions': [],
+        'active_prompt_version': None,
     }
     
     for key, value in defaults.items():

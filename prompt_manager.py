@@ -296,8 +296,16 @@ class PromptManager:
 _prompt_manager = None
 
 def get_prompt_manager() -> PromptManager:
-    """Get global prompt manager instance."""
+    """Get global prompt manager instance.
+
+    The instance is a module-level singleton that outlives individual Streamlit
+    sessions, but session_state is per-session — so re-ensure the required keys
+    on every fetch (not just on first construction), otherwise a fresh session
+    raises "st.session_state has no attribute custom_prompts".
+    """
     global _prompt_manager
     if _prompt_manager is None:
         _prompt_manager = PromptManager()
+    else:
+        _prompt_manager._ensure_session_state()
     return _prompt_manager
