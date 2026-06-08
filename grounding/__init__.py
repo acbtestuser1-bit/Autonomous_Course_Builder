@@ -10,7 +10,7 @@ from .verify import resolve_citations, slo_coverage
 from .academic_search import OpenAlexClient
 from .arxiv_search import ArxivClient
 from .textbook import TextbookIndex, build_textbook_index
-from .discover import fetch_candidate_sources
+from .discover import fetch_candidate_sources, filter_relevant, course_terms
 
 __all__ = [
     "SourceDoc",

@@ -19,6 +19,7 @@ import asyncio
 from grounding import (
     build_pool, assemble_pool, resolve_citations, slo_coverage,
     SourcePool, SourceDoc, OpenAlexClient, ArxivClient, fetch_candidate_sources,
+    filter_relevant,
 )
 from grounding.textbook import TextbookIndex
 
@@ -205,7 +206,8 @@ class SyllabusGenerator:
                     return []
 
             openalex, arxiv, serper_results = await asyncio.gather(_openalex(), _arxiv(), _current())
-            academic_results = (openalex or []) + (arxiv or [])
+            # Drop off-topic academic matches (e.g. arXiv noise) before building the pool.
+            academic_results = filter_relevant((openalex or []) + (arxiv or []), topic)
             pool = build_pool(
                 serper_results=serper_results,
                 academic_results=academic_results,

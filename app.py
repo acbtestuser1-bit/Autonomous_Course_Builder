@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Bump this whenever deploying so Render logs prove which build is live.
-APP_BUILD = "2026-06-08-async-fix-3"
+APP_BUILD = "2026-06-08-relevance-fix-4"
 logger.info(f"=== ACB module import — build {APP_BUILD} ===")
 
 from config import (

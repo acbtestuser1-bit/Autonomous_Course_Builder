@@ -8,6 +8,7 @@ curate before generation. Never raises.
 """
 import asyncio
 import logging
+import re
 from typing import List
 
 from .academic_search import OpenAlexClient
@@ -15,6 +16,38 @@ from .arxiv_search import ArxivClient
 from .models import SourceDoc
 
 logger = logging.getLogger(__name__)
+
+# Generic words that don't identify a subject — stripped before relevance matching.
+_STOPWORDS = {
+    "introduction", "intro", "principles", "fundamentals", "basics", "essentials",
+    "course", "studies", "study", "applied", "advanced", "topics", "survey",
+    "the", "and", "for", "with", "from",
+}
+
+
+def course_terms(query: str) -> set:
+    """Salient subject terms from a course name/topic (drops generic filler)."""
+    return {w for w in re.findall(r"[a-z]{4,}", (query or "").lower()) if w not in _STOPWORDS}
+
+
+def filter_relevant(docs: List[SourceDoc], query: str) -> List[SourceDoc]:
+    """Keep only academic sources that share a salient course term in title/abstract.
+
+    Guards against loose academic-search matches (e.g. arXiv returning
+    'Introduction to Electromagnetism' for a Marketing course). Falls back to
+    returning everything if the query yields no salient terms.
+    """
+    terms = course_terms(query)
+    if not terms:
+        return docs
+    kept = []
+    for d in docs:
+        hay = f"{d.title} {d.text}".lower()
+        if any(t in hay for t in terms):
+            kept.append(d)
+        else:
+            logger.debug(f"Dropped off-topic source: {d.title[:60]}")
+    return kept
 
 
 async def fetch_candidate_sources(course_name: str,
@@ -35,7 +68,8 @@ async def fetch_candidate_sources(course_name: str,
             return []
 
     openalex, arxiv = await asyncio.gather(_openalex(), _arxiv())
-    docs: List[SourceDoc] = (openalex or []) + (arxiv or [])
+    # Drop off-topic academic matches (loose arXiv/OpenAlex hits) before returning.
+    docs: List[SourceDoc] = filter_relevant((openalex or []) + (arxiv or []), course_name)
 
     if include_web and serper_api_key:
         try:
