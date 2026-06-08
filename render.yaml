@@ -1,0 +1,15 @@
+# Render Blueprint — Railway substitute for this Streamlit app.
+# Create a new "Blueprint" on render.com pointed at this repo, or a Web Service
+# using the build/start commands below. Render injects $PORT automatically.
+services:
+  - type: web
+    name: autonomous-course-builder
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # Set these in the Render dashboard (do NOT commit secrets):
+      #   OPENAI_API_KEY, SERPER_API_KEY

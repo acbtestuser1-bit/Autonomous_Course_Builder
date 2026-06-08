@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.Python
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Secrets / local config
+.env
+.streamlit/secrets.toml
+
+# Logs
+*.log
+course_builder.log
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
