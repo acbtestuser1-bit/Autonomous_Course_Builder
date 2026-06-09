@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Bump this whenever deploying so Render logs prove which build is live.
-APP_BUILD = "2026-06-08-podcast-tab-6"
+APP_BUILD = "2026-06-08-sessionctx-fix-7"
 logger.info(f"=== ACB module import — build {APP_BUILD} ===")
 
 from config import (
@@ -48,19 +48,36 @@ from prompt_ui import render_prompt_editor, render_prompt_version_manager
 from prompt_manager import get_prompt_manager
 from podcast import build_podcast, OPENAI_TTS_VOICES
 
+try:
+    from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+except Exception:  # pragma: no cover - import path varies across Streamlit versions
+    try:
+        from streamlit.runtime.scriptrunner_utils.script_run_context import (
+            add_script_run_ctx, get_script_run_ctx,
+        )
+    except Exception:
+        add_script_run_ctx = get_script_run_ctx = None
+
+
 def run_async(coro):
     """Run an async coroutine from Streamlit's (sync) script thread.
 
     Runs the coroutine in a dedicated worker thread with its own fresh event
     loop. This avoids nest_asyncio, which breaks sniffio/anyio detection on
-    newer httpx/openai versions ("unknown async library, or not in async
-    context") and was failing both generation and source search.
+    newer httpx/openai ("unknown async library, or not in async context").
+
+    The worker thread is given Streamlit's ScriptRunContext so code inside the
+    coroutine can still touch st.session_state (generators read regeneration
+    count / custom prompts); without it that raises NoSessionContext.
     """
     import threading
 
+    ctx = get_script_run_ctx() if get_script_run_ctx else None
     box = {}
 
     def _runner():
+        if add_script_run_ctx and ctx is not None:
+            add_script_run_ctx(threading.current_thread(), ctx)
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -74,6 +91,8 @@ def run_async(coro):
                 asyncio.set_event_loop(None)
 
     t = threading.Thread(target=_runner, daemon=True)
+    if add_script_run_ctx and ctx is not None:
+        add_script_run_ctx(t, ctx)
     t.start()
     t.join()
 
